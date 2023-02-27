@@ -26,7 +26,11 @@ async def cmd_start(message: types.Message):
 
 @dp.message_handler(content_types=['audio', 'voice', 'photo'])
 async def show_spectrogram(message: types.Message):
-    unique_id = path_to_file = format_file = file_info = ''
+    unique_id    = ''
+    path_to_file = ''
+    format_file  = ''
+    file_info    = ''
+
     if message.audio is not None:
         audio_id = message.audio.file_id
         unique_id = message.audio.file_unique_id
