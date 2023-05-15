@@ -1,29 +1,11 @@
 import numpy as np
-from scipy.io import wavfile
-from scipy.signal import spectrogram
 import os
 import spectr
+from fingerprinting import finger_print
+from pydub import AudioSegment
+from mutagen.mp3 import MP3
 
 
-# function to generate a fingerprint of an audio file
-def finger_print(audio_file):
-    # read audio file
-    samplerate, data = wavfile.read(audio_file)
-    # generate spectrogram
-    try:
-        f, t, Sxx = spectrogram(data[:, 0], samplerate)
-    except:
-        f, t, Sxx = spectrogram(data, samplerate)
-    # replace zeros with epsilon to handle divide by zero errors
-    Sxx[Sxx == 0] = np.finfo(float).eps
-    # take logarithm of spectrogram
-    log_spectrogram = np.log(Sxx)
-    # flatten spectrogram to generate fingerprint
-    fingerprint = log_spectrogram.flatten()
-    return fingerprint
-
-
-# function to calculate cosine distance between two fingerprints
 def cosine_distance(x, y):
     # pad the smaller fingerprint with zeros to match the size of the larger fingerprint
     if len(x) < len(y):
@@ -31,7 +13,10 @@ def cosine_distance(x, y):
     elif len(y) < len(x):
         y = np.pad(y, (0, len(x) - len(y)), mode='constant')
     # calculate cosine distance
-    return np.dot(x, y) / (np.linalg.norm(x) * np.linalg.norm(y))
+    dot_product = np.dot(x, y)
+    norm_x = np.linalg.norm(x)
+    norm_y = np.linalg.norm(y)
+    return dot_product / (norm_x * norm_y)
 
 
 # function to find the closest match for an audio file in a given set of fingerprints
@@ -53,48 +38,59 @@ def find_closest_match(audio_file, fingerprint_maps):
     return closest_match, max_distance
 
 
-# prompt user to enter directory path containing audio files
-# path = input("Enter the directory path where your music files are located: ")
-# # validate directory path
-# while True:
-#     try:
-#         if not os.path.exists(path):
-#             raise FileNotFoundError
-#         break
-#     except FileNotFoundError:
-#         print("Invalid directory path!")
-#         path = input("Enter the directory path where your music files are located: ")
-
 path = "D:\\PyCharm\\PyCharm Community Edition 2023.1\\pythonProject\\music"
 
 # generate fingerprints for all audio files in directory
 fingerprint_maps = {}
 for file_name in os.listdir(path):
-    if file_name.endswith('.wav'):
-        audio_file_path = os.path.join(path, file_name)
+    file_path = os.path.join(path, file_name)
+    if file_path.endswith(".mp3"):
+        # convert mp3 file to wav format
+        output_file = os.path.join(path, f"{os.path.splitext(file_name)[0]}.wav")
+        sound = AudioSegment.from_mp3(file_path)
+        sound.export(output_file, format='wav')
         try:
-            fp = finger_print(audio_file_path)
+            fp = finger_print(output_file)
             fingerprint_maps[file_name] = fp
         except Exception as e:
-            print(f"Error processing file {audio_file_path}: {e}")
+            print(f"Error processing file {output_file}: {e}")
+        finally:
+            # delete the wav file
+            os.remove(output_file)
 
 
-# prompt user to enter path of audio file to match
-# audio = input("Enter the path of the audio file you want to match: ")
-# # validate audio file path
-# while True:
-#     try:
-#         if not os.path.exists(audio):
-#             raise FileNotFoundError
-#         break
-#     except FileNotFoundError:
-#         print("Invalid audio file path!")
-#         audio = input("Enter the path of the audio file you want to match: ")
+def get_duration(audio_file):
+    audio_ = MP3(audio_file)
+    duration_ = audio_.info.length
+    minutes = int(duration_ // 60)
+    seconds = int(duration_ % 60)
+    duration_format = f"{minutes:02d}:{seconds:02d}"
+    return duration_format
+
 
 def finish():
     audio = os.path.join(spectr.output_file)
     # find closest match for query audio file
-    closest_match, max_distance = find_closest_match(audio, fingerprint_maps)
+    closest_match_, max_distance_ = find_closest_match(audio, fingerprint_maps)
+    path_to_file = os.path.join(path, closest_match_)
+    duration = get_duration(path_to_file)
+    # print closest match
+    return f"Song: {closest_match_[:-4]}\nDuration: {duration}"
 
-    # print closest match and its distance from query audio file
-    return f"Closest match found: {closest_match} with distance {max_distance}"
+
+def finish_debug():
+    audio = os.path.join(spectr.output_file)
+    # find closest match for query audio file
+    closest_match_, max_distance_ = find_closest_match(audio, fingerprint_maps)
+    path_to_file = os.path.join(path, closest_match_)
+    duration = get_duration(path_to_file)
+    # print closest match
+    return f"Song: {closest_match_[:-4]}\nDuration: {duration}\nDistance: {max_distance_}"
+
+
+def get_song():
+    audio = os.path.join(spectr.output_file)
+    # find closest match for query audio file
+    closest_match_, max_distance_ = find_closest_match(audio, fingerprint_maps)
+    path_to_file = os.path.join(path, closest_match_)
+    return path_to_file
